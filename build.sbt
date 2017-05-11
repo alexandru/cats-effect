@@ -264,6 +264,10 @@ scalacOptions in ThisBuild ++= {
 
 scalacOptions in Test += "-Yrangepos"
 
+// By default, sbt buffers the logging output of a test until the whole class finishes.
+// This is so that output does not get mixed up when executing in parallel.
+logBuffered := false
+
 libraryDependencies in ThisBuild ++= {
   scalaVersion.value match {
     case "2.11.8" | "2.10.6" => Seq(compilerPlugin("com.milessabin" % "si2712fix-plugin" % "1.2.0" cross CrossVersion.full))
