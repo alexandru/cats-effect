@@ -39,10 +39,10 @@ import scala.concurrent.duration.FiniteDuration
  * This is NOT a type-class, as it does not have the coherence
  * requirement.
  */
-@implicitNotFound("""Cannot find implicit value for Async[${F}].
-Building this implicit value might depend on having an implicit
-s.c.ExecutionContext in scope. Or you can build a new timer for
-any Async data type with: Timer.buildFor[${F}]
+@implicitNotFound("""Cannot find implicit value for Timer[${F}].
+Note that ${F} needs to be a cats.effect.Async data type.
+Import cats.effects.Timer.Implicits.global
+or build one with: Timer.forAsync[${F}]
 """)
 trait Timer[F[_]] {
   /**

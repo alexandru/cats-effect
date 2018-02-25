@@ -21,6 +21,21 @@ import scala.concurrent.duration.FiniteDuration
 import scala.scalajs.js
 
 private[effect] abstract class TimerImplementation {
+
+  object Implicits {
+    /**
+     * Provides an implicit, global `Timer` implementation for any
+     * data type that implements [[Async]].
+     */
+    implicit def global[F[_]](implicit F: Async[F]): Timer[F] =
+      F match {
+        // Ugly hard-coding for `IO` to avoid creating the same
+        // instance repeatedly; yes, we are cheating :-)
+        case IO.ioEffect => ioTimer.asInstanceOf[Timer[F]]
+        case _ => forAsync[F](F)
+      }
+  }
+
   /**
    * Given an `ExecutionContext`, builds a [[Timer]] for any data type
    * that has an [[Async]] instance.
@@ -29,7 +44,7 @@ private[effect] abstract class TimerImplementation {
    * to the standard `setTimeout` and to `setImmediate` for plain
    * thread shifting, if available (being non-standard).
    */
-  def buildFor[F[_]](implicit F: Async[F]): Timer[F] =
+  def forAsync[F[_]](implicit F: Async[F]): Timer[F] =
     new AsyncTimer[F]()
 
   /**
@@ -55,6 +70,9 @@ private[effect] abstract class TimerImplementation {
     extends Runnable {
     def run() = cb(Callback.rightUnit)
   }
+
+  // Reusable reference for a `Timer[IO]`
+  private val ioTimer: Timer[IO] = new AsyncTimer[IO]
 
   private def setImmediate(r: Runnable): Unit =
     setImmediateRef(() =>
