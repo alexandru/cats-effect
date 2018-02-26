@@ -22,24 +22,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 private[effect] abstract class TimerImplementation {
-
-  object Implicits {
-    /**
-     * Provides an implicit, global `Timer` implementation for any
-     * data type that implements [[Async]].
-     *
-     * The default implementation piggybacks on top of an internal
-     * `ScheduledExecutorService` for scheduling ticks with a delay, plus
-     * Scala's own `ExecutionContext.Implicits.global` for executing tasks.
-     */
-    implicit def global[F[_]](implicit F: Async[F]): Timer[F] =
-      F match {
-        // Ugly hard-coding for `IO` to avoid creating the same
-        // instance repeatedly; yes, we are cheating :-)
-        case IO.ioEffect => ioTimer.asInstanceOf[Timer[F]]
-        case _ => forAsync[F](F, ExecutionContext.Implicits.global)
-      }
-  }
+  import TimerImplementation._
 
   /**
    * Given an `ExecutionContext`, builds a [[Timer]] for any data type
@@ -53,8 +36,8 @@ private[effect] abstract class TimerImplementation {
    * @param ec is the Scala `ExecutionContext` that will get used
    *        for asynchronous execution of tasks
    */
-  def forAsync[F[_]](implicit F: Async[F], ec: ExecutionContext): Timer[F] =
-    forAsync(ec, scheduler)(F)
+  def async[F[_]](implicit F: Async[F], ec: ExecutionContext): Timer[F] =
+    new AsyncTimer[F](ec)
 
   /**
    * Given an Scala `ExecutionContext` and a `ScheduledExecutorService`
@@ -65,16 +48,21 @@ private[effect] abstract class TimerImplementation {
    * @param sc is the scheduler executor used to schedule delayed
    *        ticks
    */
-  def forAsync[F[_]](ec: ExecutionContext, sc: ScheduledExecutorService)
+  def async[F[_]](ec: ExecutionContext, sc: ScheduledExecutorService)
     (implicit F: Async[F]): Timer[F] =
-    new AsyncTimer[F](scheduler, ec)
+    new AsyncTimer[F](ec, sc)
+}
 
+private[internals] object TimerImplementation {
   /**
    * Generic, JVM-based `Timer` implementation.
    */
-  private final class AsyncTimer[F[_]](
-    sc: ScheduledExecutorService, ec: ExecutionContext)
+  final class AsyncTimer[F[_]](
+    ec: ExecutionContext, sc: ScheduledExecutorService)
     (implicit F: Async[F]) extends Timer[F] {
+
+    def this(ec: ExecutionContext)(implicit F: Async[F]) =
+      this(ec, scheduler)
 
     override def currentTimeMillis: F[Long] =
       F.delay(System.currentTimeMillis())
@@ -88,10 +76,6 @@ private[effect] abstract class TimerImplementation {
     override def shift: F[Unit] =
       F.async(cb => ec.execute(new Tick(cb)))
   }
-
-  // Reusable reference for a `Timer[IO]`
-  private lazy val ioTimer: Timer[IO] =
-    new AsyncTimer[IO](scheduler, ExecutionContext.Implicits.global)
 
   private lazy val scheduler: ScheduledExecutorService =
     Executors.newScheduledThreadPool(2, new ThreadFactory {

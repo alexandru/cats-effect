@@ -40,9 +40,9 @@ import scala.concurrent.duration.FiniteDuration
  * requirement.
  */
 @implicitNotFound("""Cannot find implicit value for Timer[${F}].
-Note that ${F} needs to be a cats.effect.Async data type.
-Import cats.effects.Timer.Implicits.global
-or build one with: Timer.forAsync[${F}]
+Note that ${F} needs to be a cats.effect.Async data type. You might also
+need a scala.concurrent.ExecutionContext in scope, or equivalent, try to
+import scala.concurrent.ExecutionContext.Implicits.global
 """)
 trait Timer[F[_]] {
   /**

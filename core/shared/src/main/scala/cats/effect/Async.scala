@@ -254,7 +254,7 @@ object Async extends AsyncInstances {
    * Generic shift operation, defined for any `Async` data type.
    *
    * Shifts the bind continuation onto the specified thread pool.
-   * Analogous with [[IO.shift]].
+   * Analogous with [[IO.shift(implicit* IO.shift]].
    */
   def shift[F[_]](ec: ExecutionContext)(implicit F: Async[F]): F[Unit] =
     F.async { cb =>

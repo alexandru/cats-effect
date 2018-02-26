@@ -20,6 +20,7 @@ import org.scalactic.source.Position
 import org.scalatest.{Assertion, AsyncFunSuite, Matchers}
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
+import scala.concurrent.duration._
 
 /**
  * Tests doing real asynchrony for both the JVM and JS, by
@@ -66,5 +67,37 @@ class IOAsyncTests extends AsyncFunSuite with Matchers {
   test("IO.raiseError#shift#runAsync") {
     val dummy = new RuntimeException("dummy")
     testEffectOnRunAsync(IO.shift.flatMap(_ => IO.raiseError(dummy)), Failure(dummy))
+  }
+
+  test("Timer[IO].shift") {
+    for (_ <- Timer[IO].shift.unsafeToFuture()) yield {
+      assert(1 == 1)
+    }
+  }
+
+  test("Timer[IO].currentTimeMillis") {
+    val time = System.currentTimeMillis()
+    val io = Timer[IO].currentTimeMillis
+
+    for (t2 <- io.unsafeToFuture()) yield {
+      time should be > 0L
+      time should be <= t2
+    }
+  }
+
+  test("Timer[IO].sleep(10.ms)") {
+    val io = Timer[IO].sleep(10.millis).map(_ => 10)
+
+    for (r <- io.unsafeToFuture()) yield {
+      r shouldBe 10
+    }
+  }
+
+  test("Timer[IO].sleep(negative)") {
+    val io = Timer[IO].sleep(-10.seconds).map(_ => 10)
+
+    for (r <- io.unsafeToFuture()) yield {
+      r shouldBe 10
+    }
   }
 }
