@@ -244,37 +244,47 @@ lazy val sharedSourcesSettings = Seq(
     baseDirectory.value.getParentFile / "shared" / "src" / "test" / "scala"
   })
 
+lazy val withSimulacrum = Seq(
+  libraryDependencies ++= Seq(
+    "com.github.mpilquist" %%% "simulacrum" % SimulacrumVersion % CompileTime
+  ),
+  libraryDependencies ++= {
+    CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, v)) if v <= 12 =>
+        Seq(
+          compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full)
+        )
+      case _ =>
+        // if scala 2.13.0-M4 or later, macro annotations merged into scala-reflect
+        // https://github.com/scala/scala/pull/6606
+        Nil
+    }
+  }
+)
+
+// -----------------------------------
+
 lazy val root = project.in(file("."))
-  .aggregate(coreJVM, coreJS, lawsJVM, lawsJS)
+  .aggregate(coreJVM, coreJS, concurrentJVM, concurrentJS, ioJVM, ioJS, lawsJVM, lawsJS)
   .configure(profile)
   .settings(skipOnPublishSettings)
 
-lazy val core = crossProject(JSPlatform, JVMPlatform).in(file("core"))
-  .settings(commonSettings: _*)
-  .settings(
-    name := "cats-effect",
+// -----------------------------------
+// cats-effect-core
+// -----------------------------------
 
+lazy val core = crossProject(JSPlatform, JVMPlatform)
+  .in(file("cats-effect-core"))
+  .settings(commonSettings: _*)
+  .settings(withSimulacrum)
+  .settings(
+    name := "cats-effect-core",
     libraryDependencies ++= Seq(
       "org.typelevel"        %%% "cats-core"  % CatsVersion,
-      "com.github.mpilquist" %%% "simulacrum" % SimulacrumVersion % CompileTime,
-
-      "org.typelevel"  %%% "cats-laws"  % CatsVersion             % "test",
-      "org.scalatest"  %%% "scalatest"  % ScalaTestVersion.value  % "test",
-      "org.scalacheck" %%% "scalacheck" % ScalaCheckVersion.value % "test",
-      "org.typelevel"  %%% "discipline" % DisciplineVersion.value % "test"),
-
-    libraryDependencies ++= {
-      CrossVersion.partialVersion(scalaVersion.value) match {
-        case Some((2, v)) if v <= 12 =>
-          Seq(
-            compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full)
-          )
-        case _ =>
-          // if scala 2.13.0-M4 or later, macro annotations merged into scala-reflect
-          // https://github.com/scala/scala/pull/6606
-          Nil
-      }
-    })
+      "org.typelevel"        %%% "cats-laws"  % CatsVersion             % "test",
+      "org.scalatest"        %%% "scalatest"  % ScalaTestVersion.value  % "test",
+      "org.scalacheck"       %%% "scalacheck" % ScalaCheckVersion.value % "test",
+      "org.typelevel"        %%% "discipline" % DisciplineVersion.value % "test"))
   .jvmConfigure(_.enablePlugins(AutomateHeaderPlugin))
   .jvmConfigure(_.settings(mimaSettings))
   .jsConfigure(_.enablePlugins(AutomateHeaderPlugin))
@@ -284,19 +294,69 @@ lazy val core = crossProject(JSPlatform, JVMPlatform).in(file("core"))
 lazy val coreJVM = core.jvm
 lazy val coreJS = core.js
 
+// -----------------------------------
+// cats-effect-concurrent
+// -----------------------------------
+
+lazy val concurrent = crossProject(JSPlatform, JVMPlatform)
+  .in(file("cats-effect-concurrent"))
+  .dependsOn(core)
+  .settings(commonSettings: _*)
+  .settings(
+    name := "cats-effect-concurrent",
+    libraryDependencies ++= Seq(
+      "org.scalacheck" %%% "scalacheck" % ScalaCheckVersion.value % "test",
+      "org.typelevel"  %%% "discipline" % DisciplineVersion.value % "test",
+      "org.scalatest"  %%% "scalatest"  % ScalaTestVersion.value % "test"))
+  .jvmConfigure(_.enablePlugins(AutomateHeaderPlugin))
+  .jvmConfigure(_.settings(mimaSettings))
+  .jsConfigure(_.enablePlugins(AutomateHeaderPlugin))
+  .jvmConfigure(profile)
+  .jsConfigure(_.settings(scalaJSSettings))
+
+lazy val concurrentJVM = concurrent.jvm
+lazy val concurrentJS = concurrent.js
+
+// -----------------------------------
+// cats-effect-io
+// -----------------------------------
+
+lazy val io = crossProject(JSPlatform, JVMPlatform)
+  .in(file("cats-effect-io"))
+  .dependsOn(core)
+  .dependsOn(concurrent)
+  .settings(commonSettings: _*)
+  .settings(withSimulacrum)
+  .settings(
+    name := "cats-effect-io",
+    libraryDependencies ++= Seq(
+      "org.scalacheck" %%% "scalacheck" % ScalaCheckVersion.value % "test",
+      "org.typelevel"  %%% "discipline" % DisciplineVersion.value % "test",
+      "org.scalatest"  %%% "scalatest"  % ScalaTestVersion.value  % "test"))
+  .jvmConfigure(_.enablePlugins(AutomateHeaderPlugin))
+  .jvmConfigure(_.settings(mimaSettings))
+  .jsConfigure(_.enablePlugins(AutomateHeaderPlugin))
+  .jvmConfigure(profile)
+  .jsConfigure(_.settings(scalaJSSettings))
+
+lazy val ioJVM = io.jvm
+lazy val ioJS = io.js
+
+// -----------------------------------
+// cats-effect-laws
+// -----------------------------------
+
 lazy val laws = crossProject(JSPlatform, JVMPlatform)
-  .in(file("laws"))
-  .dependsOn(core % "compile->compile;test->test")
+  .in(file("cats-effect-laws"))
+  .dependsOn(io % "compile->compile;test->test")
   .settings(commonSettings: _*)
   .settings(
     name := "cats-effect-laws",
-
     libraryDependencies ++= Seq(
       "org.typelevel"  %%% "cats-laws"  % CatsVersion,
-      "org.scalacheck" %%% "scalacheck" % ScalaCheckVersion.value,
-      "org.typelevel"  %%% "discipline" % DisciplineVersion.value,
-      "org.scalatest"  %%% "scalatest"  % ScalaTestVersion.value % "test"))
-
+      "org.scalacheck" %%% "scalacheck" % ScalaCheckVersion.value % "test",
+      "org.typelevel"  %%% "discipline" % DisciplineVersion.value % "test",
+      "org.scalatest"  %%% "scalatest"  % ScalaTestVersion.value  % "test"))
   .jvmConfigure(_.enablePlugins(AutomateHeaderPlugin))
   .jvmConfigure(_.settings(mimaSettings))
   .jsConfigure(_.enablePlugins(AutomateHeaderPlugin))
@@ -305,6 +365,8 @@ lazy val laws = crossProject(JSPlatform, JVMPlatform)
 
 lazy val lawsJVM = laws.jvm
 lazy val lawsJS = laws.js
+
+// -----------------------------------
 
 lazy val benchmarksPrev = project.in(file("benchmarks/vPrev"))
   .configure(profile)
