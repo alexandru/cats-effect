@@ -35,7 +35,7 @@ object Bi extends BiInstances4 {
   /**
    * Extension methods for our opaque type.
    */
-  implicit final class Methods[F[_], E, A](val self: Bi[F, E, A]) {
+  implicit final class Methods[F[_], E, A](val self: Bi[F, E, A]) extends AnyVal {
     def underlying: F[A] =
       Bi.unwrap(self)
 
@@ -164,6 +164,14 @@ object Bi extends BiInstances4 {
     /** See [[Bi.tailRecM]]. */
     def tailRecM[E, A, B](a: A)(f: A => Bi[F, E, Either[A, B]])(implicit F: Monad[F]): Bi[F, E, B] =
       Bi.tailRecM(a)(f)
+
+    /** See [[Bi.async]]. */
+    def async[A](k: (Either[Throwable, A] => Unit) => Unit)(implicit F: Async[F]): Bi[F, Throwable, A] =
+      Bi.async(k)(F)
+
+    /** See [[Bi.asyncF]]. */
+    def asyncF[A](k: (Either[Throwable, A] => Unit) => Bi[F, Throwable, Unit])(implicit F: Async[F]): Bi[F, Throwable, A] =
+      Bi.asyncF(k)(F)
   }
 
   /**
