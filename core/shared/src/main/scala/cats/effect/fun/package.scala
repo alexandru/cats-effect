@@ -18,7 +18,7 @@ package cats.effect
 
 package object fun {
   /**
-   * Datatype for working doing working with "bifunctor IO",
+   * Datatype for working doing working with "bi-functor I/O",
    * as a very light-weight and effect-powered alternative
    * to `cats.data.EitherT`.
    *

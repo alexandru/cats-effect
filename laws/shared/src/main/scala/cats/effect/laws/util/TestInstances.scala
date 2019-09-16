@@ -16,8 +16,11 @@
 
 package cats.effect.laws.util
 
+import cats.ApplicativeError
+import cats.effect.fun.Bi
 import cats.effect.{Bracket, IO, Resource, SyncIO}
 import cats.kernel.Eq
+
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 
@@ -74,6 +77,13 @@ trait TestInstances {
               case _ => false
             }
         }
+      }
+    }
+
+  implicit def eqBiT[F[_], E, A](implicit F: ApplicativeError[F, Throwable], eqF: Eq[F[Either[E, A]]]): Eq[Bi[F, E, A]] =
+    new Eq[Bi[F, E, A]] {
+      override def eqv(x: Bi[F, E, A], y: Bi[F, E, A]): Boolean = {
+        eqF.eqv(x.toEitherF, y.toEitherF)
       }
     }
 

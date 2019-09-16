@@ -17,9 +17,11 @@
 package cats.effect
 package fun
 
+import cats.data.EitherT
 import cats.effect.ExitCase.{Canceled, Completed, Error}
 import cats.implicits._
 import cats.{Applicative, ApplicativeError, Functor, Monad, MonadError}
+
 import scala.util.control.NoStackTrace
 
 /**
@@ -42,7 +44,7 @@ object Bi extends BiInstances4 {
     def map[B](f: A => B)(implicit F: Functor[F]): Bi[F, E, B] =
       Bi.unsafeWrap(F.map(Bi.unwrap(self))(f))
 
-    def flatMap[EE >: E, B](f: A => Bi[F, EE, B])(implicit F: Monad[F]): Bi[F, EE, B] =
+    def flatMap[B](f: A => Bi[F, E, B])(implicit F: Monad[F]): Bi[F, E, B] =
       Bi.unsafeWrap(F.flatMap(Bi.unwrap(self))(f.asInstanceOf[A => F[B]]))
 
     def attempt(implicit F: MonadError[F, Throwable]): Bi[F, Nothing, Either[E, A]] = {
@@ -56,6 +58,15 @@ object Bi extends BiInstances4 {
             F.raiseError(e) : F[Either[E, A]]
         })
     }
+
+    def errorWiden[EE >: E]: Bi[F, EE, A] = self
+
+    def errorMap[C](f: E => C)(implicit F: ApplicativeError[F, Throwable]): Bi[F, C, A] =
+      Bi.unsafeWrap(
+        F.recoverWith(Bi.unwrap(self)) {
+          case WrappedErrorException(e) =>
+            F.raiseError(WrappedErrorException(f(e.asInstanceOf[E])))
+        })
 
     def handleError(f: E => A)(implicit F: ApplicativeError[F, Throwable]): Bi[F, Nothing, A] =
       Bi.unsafeWrap(
@@ -71,13 +82,13 @@ object Bi extends BiInstances4 {
             Bi.unwrap(f(e.asInstanceOf[E]))
         })
 
-    def bracket[EE >: E, B](use: A => Bi[F, EE, B])(release: A => Bi[F, Nothing, Unit])
+    def bracket[B](use: A => Bi[F, E, B])(release: A => Bi[F, Nothing, Unit])
       (implicit F: Bracket[F, Throwable]): Bi[F, E, B] = {
 
       Bi.unsafeWrap(F.bracket(Bi.unwrap(self))(use.asInstanceOf[A => F[B]])(release.asInstanceOf[A => F[Unit]]))
     }
 
-    def bracketCase[EE >: E, B](use: A => Bi[F, EE, B])(release: (A, ExitCase[EE]) => Bi[F, Nothing, Unit])
+    def bracketCase[B](use: A => Bi[F, E, B])(release: (A, ExitCase[E]) => Bi[F, Nothing, Unit])
       (implicit F: Bracket[F, Throwable]): Bi[F, E, B] = {
 
       Bi.unsafeWrap(F.bracketCase(Bi.unwrap(self))(use.asInstanceOf[A => F[B]]) { (a, ec) =>
@@ -85,7 +96,7 @@ object Bi extends BiInstances4 {
           case Completed =>
             Bi.unwrap(release(a, Completed))
           case Error(WrappedErrorException(e)) =>
-            Bi.unwrap(release(a, Error(e.asInstanceOf[EE])))
+            Bi.unwrap(release(a, Error(e.asInstanceOf[E])))
           case Error(_) =>
             Bi.unwrap(release(a, Completed))
           case Canceled =>
@@ -93,6 +104,36 @@ object Bi extends BiInstances4 {
         }
       })
     }
+
+    def rethrowT(implicit F: ApplicativeError[F, Throwable], ev: E <:< Throwable): F[A] =
+      rethrowViaT(identity[E])
+
+    def rethrowViaT(f: E => Throwable)(implicit F: ApplicativeError[F, Throwable]): F[A] =
+      F.recoverWith(Bi.unwrap(self)) {
+        case WrappedErrorException(e) =>
+          F.raiseError(f(e.asInstanceOf[E]))
+      }
+
+    def toEitherF(implicit F: ApplicativeError[F, Throwable]): F[Either[E, A]] =
+      F.recover(F.map(Bi.unwrap(self))(a => Right(a) : Either[E, A])) {
+        case WrappedErrorException(e) =>
+          Left(e.asInstanceOf[E])
+      }
+
+    def toEitherT(implicit F: ApplicativeError[F, Throwable]): EitherT[F, E, A] =
+      EitherT(toEitherF)
+
+    def fold[B](fe: E => B, fa: A => B)(implicit F: ApplicativeError[F, Throwable]): F[B] =
+      F.recover(F.map(Bi.unwrap(self))(fa)) {
+        case WrappedErrorException(e) =>
+          fe(e.asInstanceOf[E])
+      }
+
+    def foldF[B](fe: E => F[B], fa: A => F[B])(implicit F: MonadError[F, Throwable]): F[B] =
+      F.recoverWith(F.flatMap(Bi.unwrap(self))(fa)) {
+        case WrappedErrorException(e) =>
+          fe(e.asInstanceOf[E])
+      }
   }
 
   def apply[F[_]]: Apply[F] = new Apply[F]

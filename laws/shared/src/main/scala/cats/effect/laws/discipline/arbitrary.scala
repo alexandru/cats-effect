@@ -21,9 +21,11 @@ package discipline
 
 import cats.syntax.all._
 import cats.effect.IO.Par
+import cats.effect.fun.Bi
 import cats.effect.internals.IORunLoop
 import org.scalacheck.Arbitrary.{arbitrary => getArbitrary}
 import org.scalacheck._
+
 import scala.util.Either
 
 object arbitrary {
@@ -142,4 +144,15 @@ object arbitrary {
       1 -> genSuspend
     )
   }
+
+  def genBiF[F[_], E, A](implicit aFEA: Arbitrary[F[Either[E, A]]]): Gen[Bi[F, E, A]] = {
+
+    val pula = for {
+      fea <- getArbitrary[F[Either[E, A]]]
+    } yield {
+      Bi[F].liftF(fea).rethrow
+    }
+    ???
+  }
+
 }
