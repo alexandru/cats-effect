@@ -16,7 +16,7 @@
 
 package cats.effect
 
-import org.scalatest.Matchers
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.funsuite.AsyncFunSuite
 
 import scala.concurrent.duration.{FiniteDuration, _}
@@ -43,8 +43,7 @@ class IOJSTests extends AsyncFunSuite with Matchers {
       try {
         delayed(100.millis)(10).unsafeRunSync()
         fail("Expected UnsupportedOperationException")
-      }
-      catch {
+      } catch {
         case _: UnsupportedOperationException =>
           succeed
       }

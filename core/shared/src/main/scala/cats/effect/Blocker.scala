@@ -44,13 +44,19 @@ final class Blocker private (val blockingContext: ExecutionContext) extends AnyV
    */
   def blockOn[F[_], A](fa: F[A])(implicit cs: ContextShift[F]): F[A] =
     cs.blockOn(this)(fa)
+
+  /**
+   * `blockOn` as a natural transformation.
+   */
+  def blockOnK[F[_]](implicit cs: ContextShift[F]): F ~> F =
+    λ[F ~> F](blockOn(_))
 }
 
 object Blocker extends BlockerPlatform {
 
   /**
    * Creates a blocker that delegates to the supplied execution context.
-   * 
+   *
    * This must not be used with general purpose contexts like
    * `scala.concurrent.ExecutionContext.Implicits.global`.
    */

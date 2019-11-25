@@ -17,7 +17,8 @@
 package cats.effect
 
 import org.scalactic.source.Position
-import org.scalatest.{Assertion, Matchers}
+import org.scalatest.Assertion
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.funsuite.AsyncFunSuite
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
@@ -35,8 +36,7 @@ class IOAsyncTests extends AsyncFunSuite with Matchers {
   implicit val cs: ContextShift[IO] =
     IO.contextShift(executionContext)
 
-  def testEffectOnRunAsync(source: IO[Int], expected: Try[Int])
-    (implicit pos: Position): Future[Assertion] = {
+  def testEffectOnRunAsync(source: IO[Int], expected: Try[Int])(implicit pos: Position): Future[Assertion] = {
 
     val effect = Promise[Int]()
     val attempt = Promise[Try[Int]]()
@@ -44,7 +44,7 @@ class IOAsyncTests extends AsyncFunSuite with Matchers {
 
     val io = source.runAsync {
       case Right(a) => IO(effect.success(a))
-      case Left(e) => IO(effect.failure(e))
+      case Left(e)  => IO(effect.failure(e))
     }
 
     for (_ <- io.toIO.unsafeToFuture(); v <- attempt.future) yield {

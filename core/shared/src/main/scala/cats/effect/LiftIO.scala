@@ -19,7 +19,7 @@ package effect
 
 import simulacrum._
 
-import cats.data.{EitherT, IorT, Kleisli, OptionT, StateT, WriterT, ReaderWriterStateT}
+import cats.data.{EitherT, IorT, Kleisli, OptionT, ReaderWriterStateT, StateT, WriterT}
 
 import scala.annotation.implicitNotFound
 
@@ -34,110 +34,111 @@ trait LiftIO[F[_]] {
 object LiftIO {
 
   /**
-    * [[LiftIO.liftIO]] as a natural transformation.
-    */
+   * [[LiftIO.liftIO]] as a natural transformation.
+   */
   def liftK[F[_]: LiftIO]: IO ~> F = λ[IO ~> F](_.to[F])
 
   /**
    * [[LiftIO]] instance built for `cats.data.EitherT` values initialized
    * with any `F` data type that also implements `LiftIO`.
    */
-  implicit def catsEitherTLiftIO[F[_]: LiftIO: Functor, L]: LiftIO[EitherT[F, L, ?]] =
+  implicit def catsEitherTLiftIO[F[_]: LiftIO: Functor, L]: LiftIO[EitherT[F, L, *]] =
     new EitherTLiftIO[F, L] { def F = LiftIO[F]; def FF = Functor[F] }
 
   /**
    * [[LiftIO]] instance built for `cats.data.Kleisli` values initialized
    * with any `F` data type that also implements `LiftIO`.
    */
-  implicit def catsKleisliLiftIO[F[_]: LiftIO, R]: LiftIO[Kleisli[F, R, ?]] =
+  implicit def catsKleisliLiftIO[F[_]: LiftIO, R]: LiftIO[Kleisli[F, R, *]] =
     new KleisliLiftIO[F, R] { def F = LiftIO[F] }
 
   /**
    * [[LiftIO]] instance built for `cats.data.OptionT` values initialized
    * with any `F` data type that also implements `LiftIO`.
    */
-  implicit def catsOptionTLiftIO[F[_]: LiftIO: Functor]: LiftIO[OptionT[F, ?]] =
+  implicit def catsOptionTLiftIO[F[_]: LiftIO: Functor]: LiftIO[OptionT[F, *]] =
     new OptionTLiftIO[F] { def F = LiftIO[F]; def FF = Functor[F] }
 
   /**
    * [[LiftIO]] instance built for `cats.data.StateT` values initialized
    * with any `F` data type that also implements `LiftIO`.
    */
-  implicit def catsStateTLiftIO[F[_]: LiftIO: Applicative, S]: LiftIO[StateT[F, S, ?]] =
+  implicit def catsStateTLiftIO[F[_]: LiftIO: Applicative, S]: LiftIO[StateT[F, S, *]] =
     new StateTLiftIO[F, S] { def F = LiftIO[F]; def FA = Applicative[F] }
 
   /**
    * [[LiftIO]] instance built for `cats.data.WriterT` values initialized
    * with any `F` data type that also implements `LiftIO`.
    */
-  implicit def catsWriterTLiftIO[F[_]: LiftIO: Applicative, L: Monoid]: LiftIO[WriterT[F, L, ?]] =
+  implicit def catsWriterTLiftIO[F[_]: LiftIO: Applicative, L: Monoid]: LiftIO[WriterT[F, L, *]] =
     new WriterTLiftIO[F, L] { def F = LiftIO[F]; def FA = Applicative[F]; def L = Monoid[L] }
 
   /**
-    * [[LiftIO]] instance built for `cats.data.IorT` values initialized
-    * with any `F` data type that also implements `LiftIO`.
-    */
-  implicit def catsIorTLiftIO[F[_]: LiftIO: Applicative, L]: LiftIO[IorT[F, L, ?]] =
+   * [[LiftIO]] instance built for `cats.data.IorT` values initialized
+   * with any `F` data type that also implements `LiftIO`.
+   */
+  implicit def catsIorTLiftIO[F[_]: LiftIO: Applicative, L]: LiftIO[IorT[F, L, *]] =
     new IorTLiftIO[F, L] { def F = LiftIO[F]; def FA = Applicative[F] }
 
   /**
-    * [[LiftIO]] instance built for `cats.data.ReaderWriterStateT` values initialized
-    * with any `F` data type that also implements `LiftIO`.
-    */
-  implicit def catsReaderWriterStateTLiftIO[F[_]: LiftIO: Applicative, E, L: Monoid, S]: LiftIO[ReaderWriterStateT[F, E, L, S, ?]] =
+   * [[LiftIO]] instance built for `cats.data.ReaderWriterStateT` values initialized
+   * with any `F` data type that also implements `LiftIO`.
+   */
+  implicit def catsReaderWriterStateTLiftIO[F[_]: LiftIO: Applicative, E, L: Monoid, S]
+    : LiftIO[ReaderWriterStateT[F, E, L, S, *]] =
     new ReaderWriterStateTLiftIO[F, E, L, S] { def F = LiftIO[F]; def FA = Applicative[F]; def L = Monoid[L] }
 
-  private[effect] trait EitherTLiftIO[F[_], L] extends LiftIO[EitherT[F, L, ?]] {
-    protected implicit def F: LiftIO[F]
+  private[effect] trait EitherTLiftIO[F[_], L] extends LiftIO[EitherT[F, L, *]] {
+    implicit protected def F: LiftIO[F]
     protected def FF: Functor[F]
 
     override def liftIO[A](ioa: IO[A]): EitherT[F, L, A] =
       EitherT.liftF(F.liftIO(ioa))(FF)
   }
 
-  private[effect] trait KleisliLiftIO[F[_], R] extends LiftIO[Kleisli[F, R, ?]] {
-    protected implicit def F: LiftIO[F]
+  private[effect] trait KleisliLiftIO[F[_], R] extends LiftIO[Kleisli[F, R, *]] {
+    implicit protected def F: LiftIO[F]
 
     override def liftIO[A](ioa: IO[A]): Kleisli[F, R, A] =
       Kleisli.liftF(F.liftIO(ioa))
   }
 
-  private[effect] trait OptionTLiftIO[F[_]] extends LiftIO[OptionT[F, ?]] {
-    protected implicit def F: LiftIO[F]
+  private[effect] trait OptionTLiftIO[F[_]] extends LiftIO[OptionT[F, *]] {
+    implicit protected def F: LiftIO[F]
     protected def FF: Functor[F]
 
     override def liftIO[A](ioa: IO[A]): OptionT[F, A] =
       OptionT.liftF(F.liftIO(ioa))(FF)
   }
 
-  private[effect] trait StateTLiftIO[F[_], S] extends LiftIO[StateT[F, S, ?]] {
-    protected implicit def F: LiftIO[F]
+  private[effect] trait StateTLiftIO[F[_], S] extends LiftIO[StateT[F, S, *]] {
+    implicit protected def F: LiftIO[F]
     protected def FA: Applicative[F]
 
     override def liftIO[A](ioa: IO[A]): StateT[F, S, A] =
       StateT.liftF(F.liftIO(ioa))(FA)
   }
 
-  private[effect] trait WriterTLiftIO[F[_], L] extends LiftIO[WriterT[F, L, ?]] {
-    protected implicit def F: LiftIO[F]
-    protected implicit def L: Monoid[L]
+  private[effect] trait WriterTLiftIO[F[_], L] extends LiftIO[WriterT[F, L, *]] {
+    implicit protected def F: LiftIO[F]
+    implicit protected def L: Monoid[L]
     protected def FA: Applicative[F]
 
     override def liftIO[A](ioa: IO[A]): WriterT[F, L, A] =
       WriterT.liftF(F.liftIO(ioa))(L, FA)
   }
 
-  private[effect] trait IorTLiftIO[F[_], L] extends LiftIO[IorT[F, L, ?]] {
-    protected implicit def F: LiftIO[F]
+  private[effect] trait IorTLiftIO[F[_], L] extends LiftIO[IorT[F, L, *]] {
+    implicit protected def F: LiftIO[F]
     protected def FA: Applicative[F]
 
     override def liftIO[A](ioa: IO[A]): IorT[F, L, A] =
       IorT.liftF(F.liftIO(ioa))(FA)
   }
 
-  private[effect] trait ReaderWriterStateTLiftIO[F[_], E, L, S] extends LiftIO[ReaderWriterStateT[F, E, L, S, ?]] {
-    protected implicit def F: LiftIO[F]
-    protected implicit def L: Monoid[L]
+  private[effect] trait ReaderWriterStateTLiftIO[F[_], E, L, S] extends LiftIO[ReaderWriterStateT[F, E, L, S, *]] {
+    implicit protected def F: LiftIO[F]
+    implicit protected def L: Monoid[L]
     protected def FA: Applicative[F]
 
     override def liftIO[A](ioa: IO[A]): ReaderWriterStateT[F, E, L, S, A] =

@@ -20,7 +20,8 @@ package concurrent
 
 import cats.data.State
 import cats.implicits._
-import org.scalatest.{Matchers, Succeeded}
+import org.scalatest.Succeeded
+import org.scalatest.matchers.should.Matchers
 import org.scalatest.compatible.Assertion
 import org.scalatest.funsuite.AsyncFunSuite
 import scala.concurrent.{ExecutionContext, Future}
@@ -136,4 +137,3 @@ class RefTests extends AsyncFunSuite with Matchers {
     run(op.map(_ shouldBe true))
   }
 }
- 
