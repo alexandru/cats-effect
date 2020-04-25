@@ -257,22 +257,22 @@ object Bracket {
     final private[this] val kleisliMonadError: MonadError[Kleisli[F, R, *], E] =
       Kleisli.catsDataMonadErrorForKleisli
 
-    def pure[A](x: A): Kleisli[F, R, A] =
+    override def pure[A](x: A): Kleisli[F, R, A] =
       kleisliMonadError.pure(x)
 
-    def handleErrorWith[A](fa: Kleisli[F, R, A])(f: E => Kleisli[F, R, A]): Kleisli[F, R, A] =
+    override def handleErrorWith[A](fa: Kleisli[F, R, A])(f: E => Kleisli[F, R, A]): Kleisli[F, R, A] =
       kleisliMonadError.handleErrorWith(fa)(f)
 
-    def raiseError[A](e: E): Kleisli[F, R, A] =
+    override def raiseError[A](e: E): Kleisli[F, R, A] =
       kleisliMonadError.raiseError(e)
 
-    def flatMap[A, B](fa: Kleisli[F, R, A])(f: A => Kleisli[F, R, B]): Kleisli[F, R, B] =
+    override def flatMap[A, B](fa: Kleisli[F, R, A])(f: A => Kleisli[F, R, B]): Kleisli[F, R, B] =
       kleisliMonadError.flatMap(fa)(f)
 
-    def tailRecM[A, B](a: A)(f: A => Kleisli[F, R, Either[A, B]]): Kleisli[F, R, B] =
+    override def tailRecM[A, B](a: A)(f: A => Kleisli[F, R, Either[A, B]]): Kleisli[F, R, B] =
       kleisliMonadError.tailRecM(a)(f)
 
-    def bracketCase[A, B](
+    override def bracketCase[A, B](
       acquire: Kleisli[F, R, A]
     )(use: A => Kleisli[F, R, B])(release: (A, ExitCase[E]) => Kleisli[F, R, Unit]): Kleisli[F, R, B] =
       Kleisli { r =>
@@ -285,5 +285,21 @@ object Bracket {
       Kleisli { r =>
         F.uncancelable(fa.run(r))
       }
+
+    /* Overridden to benefit from optimizations of `F.redeem`. */
+    override final def redeem[A, B](fa: Kleisli[F, R, A])(recover: E => B, f: A => B): Kleisli[F, R, B] =
+      shift[R, B] { r =>
+        F.redeem(fa.run(r))(recover, f)
+      }
+
+    /* Overridden to benefit from optimizations of `F.redeemWith`. */
+    override final def redeemWith[A, B](fa: Kleisli[F, R, A])(recover: E => Kleisli[F, R, B], bind: A => Kleisli[F, R, B]): Kleisli[F, R, B] =
+      shift[R, B](r => F.redeemWith(fa.run(r))(
+        (e: E) => recover(e).run(r),
+        (a: A) => bind(a).run(r)
+      ))
+
+    protected def shift[A, B](run: A => F[B]): Kleisli[F, A, B] =
+      Kleisli(r => F.flatMap(F.pure(r))(run))
   }
 }

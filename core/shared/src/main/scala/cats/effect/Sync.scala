@@ -118,18 +118,6 @@ object Sync {
     def raiseError[A](e: Throwable): EitherT[F, L, A] =
       EitherT.liftF(F.raiseError(e))
 
-    override def redeem[A, B](fa: EitherT[F, L, A])(recover: Throwable => B, f: A => B): EitherT[F, L, B] =
-      EitherT(F.redeem(fa.value)(e => Right(recover(e)), la => la.map(f)))
-
-    override def redeemWith[A, B](fa: EitherT[F, L, A])(recover: Throwable => EitherT[F, L, B], bind: A => EitherT[F, L, B]): EitherT[F, L, B] =
-      EitherT(F.redeemWith(fa.value)(
-        e => recover(e).value,
-        la => la match {
-          case Right(a) => bind(a).value
-          case _ => F.pure(la.asInstanceOf[Either[L, B]])
-        }
-      ))
-
     def bracketCase[A, B](
       acquire: EitherT[F, L, A]
     )(use: A => EitherT[F, L, B])(release: (A, ExitCase[Throwable]) => EitherT[F, L, Unit]): EitherT[F, L, B] =
@@ -165,6 +153,20 @@ object Sync {
 
     override def uncancelable[A](fa: EitherT[F, L, A]): EitherT[F, L, A] =
       EitherT(F.uncancelable(fa.value))
+
+    /* Overridden to benefit from optimizations of `F.redeemWith`. */
+    override def redeem[A, B](fa: EitherT[F, L, A])(recover: Throwable => B, f: A => B): EitherT[F, L, B] =
+      EitherT(F.redeem(fa.value)(e => Right(recover(e)), la => la.map(f)))
+
+    /* Overridden to benefit from optimizations of `F.redeemWith`. */
+    override def redeemWith[A, B](fa: EitherT[F, L, A])(recover: Throwable => EitherT[F, L, B], bind: A => EitherT[F, L, B]): EitherT[F, L, B] =
+      EitherT(F.redeemWith(fa.value)(
+        e => recover(e).value,
+        la => la match {
+          case Right(a) => bind(a).value
+          case _ => F.pure(la.asInstanceOf[Either[L, B]])
+        }
+      ))
   }
 
   private[effect] trait OptionTSync[F[_]] extends Sync[OptionT[F, *]] {
@@ -177,18 +179,6 @@ object Sync {
 
     def raiseError[A](e: Throwable): OptionT[F, A] =
       OptionT.catsDataMonadErrorForOptionT[F, Throwable].raiseError(e)
-
-    override def redeem[A, B](fa: OptionT[F, A])(recover: Throwable => B, f: A => B): OptionT[F, B] =
-      OptionT(F.redeem(fa.value)(e => Some(recover(e)), la => la.map(f)))
-
-    override def redeemWith[A, B](fa: OptionT[F, A])(recover: Throwable => OptionT[F, B], bind: A => OptionT[F, B]): OptionT[F, B] =
-      OptionT(F.redeemWith(fa.value)(
-        e => recover(e).value,
-        la => la match {
-          case Some(a) => bind(a).value
-          case _ => F.pure(None)
-        }
-      ))
 
     def bracketCase[A, B](
       acquire: OptionT[F, A]
@@ -226,6 +216,20 @@ object Sync {
 
     override def uncancelable[A](fa: OptionT[F, A]): OptionT[F, A] =
       OptionT(F.uncancelable(fa.value))
+
+    /* Overridden to benefit from optimizations of `F.redeemWith`. */
+    override def redeem[A, B](fa: OptionT[F, A])(recover: Throwable => B, f: A => B): OptionT[F, B] =
+      OptionT(F.redeem(fa.value)(e => Some(recover(e)), la => la.map(f)))
+
+    /* Overridden to benefit from optimizations of `F.redeemWith`. */
+    override def redeemWith[A, B](fa: OptionT[F, A])(recover: Throwable => OptionT[F, B], bind: A => OptionT[F, B]): OptionT[F, B] =
+      OptionT(F.redeemWith(fa.value)(
+        e => recover(e).value,
+        la => la match {
+          case Some(a) => bind(a).value
+          case _ => F.pure(None)
+        }
+      ))
   }
 
   private[effect] trait StateTSync[F[_], S] extends Sync[StateT[F, S, *]] {
@@ -272,6 +276,33 @@ object Sync {
 
     def suspend[A](thunk: => StateT[F, S, A]): StateT[F, S, A] =
       StateT.applyF(F.suspend(thunk.runF))
+
+//    override def redeem[A, B](fa: StateT[F, S, A])(recover: Throwable => B, f: A => B): StateT[F, S, B] =
+//      IndexedStateT.applyF(F.map(fa.runF) { r =>
+//        AndThen(r).andThen { r: F[(S, A)] =>
+//          F.redeem(r)(
+//            { case (s, e) => (s, recover(e))}
+//          )
+//        }
+//      })
+
+//      IndexedStateT.applyF(F.map(fa.runF) { safsba =>
+//        AndThen(safsba).andThen { fsba =>
+//          F.flatMap(fsba) {
+//            case (sb, a) =>
+//              f(a).run(sb)
+//          }
+//        }
+//      })
+//    override def redeemWith[A, B](fa: StateT[F, S, A])(recover: Throwable => StateT[F, S, B], bind: A => StateT[F, S, B]): StateT[F, S, B] =
+//      IndexedStateT.applyF(F.map(fa.runF) { safsba =>
+//        AndThen(safsba).andThen { fsba: F[(S, A)] =>
+//          F.redeemWith(fsba)(
+//            e => recover(e).run(),
+//            { case (s, a) => bind(a).run(s)}
+//          )
+//        }
+//      })
   }
 
   private[effect] trait WriterTSync[F[_], L] extends Sync[WriterT[F, L, *]] {
@@ -342,6 +373,9 @@ object Sync {
       Kleisli { r =>
         F.suspend(F.uncancelable(fa.run(r)))
       }
+
+    override protected final def shift[A, B](run: A => F[B]): Kleisli[F, A, B] =
+      Kleisli(r => F.defer(run(r)))
   }
 
   private[effect] trait IorTSync[F[_], L] extends Sync[IorT[F, L, *]] {
